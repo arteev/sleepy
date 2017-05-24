@@ -1,7 +1,6 @@
 package sleepy
 
 import (
-	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -29,73 +28,73 @@ var (
 // GetSupported is the interface that provides the Get
 // method a resource must support to receive HTTP GETs.
 type GetSupported interface {
-	Get(context.Context, url.Values, http.Header) (int, interface{}, http.Header)
+	Get(url.Values, http.Header) (int, interface{}, http.Header)
 }
 
-//GetSupportedWoCtx is the interface that provides the Get
+//GetSupportedRequest is the interface that provides the Get
 // method a resource must support to receive HTTP GETs
-type GetSupportedWoCtx interface {
-	Get(url.Values, http.Header) (int, interface{}, http.Header)
+type GetSupportedRequest interface {
+	Get(*http.Request) (int, interface{}, http.Header)
 }
 
 // PostSupported is the interface that provides the Post
 // method a resource must support to receive HTTP POSTs.
 type PostSupported interface {
-	Post(context.Context, url.Values, http.Header) (int, interface{}, http.Header)
+	Post(url.Values, http.Header) (int, interface{}, http.Header)
 }
 
-// PostSupportedWoCtx is the interface that provides the Post
+// PostSupportedRequest is the interface that provides the Post
 // method a resource must support to receive HTTP POSTs.
-type PostSupportedWoCtx interface {
-	Post(url.Values, http.Header) (int, interface{}, http.Header)
+type PostSupportedRequest interface {
+	Post(*http.Request) (int, interface{}, http.Header)
 }
 
 // PutSupported is the interface that provides the Put
 // method a resource must support to receive HTTP PUTs.
 type PutSupported interface {
-	Put(context.Context, url.Values, http.Header) (int, interface{}, http.Header)
+	Put(url.Values, http.Header) (int, interface{}, http.Header)
 }
 
-// PutSupportedWoCtx is the interface that provides the Put
+// PutSupportedRequest is the interface that provides the Put
 // method a resource must support to receive HTTP PUTs.
-type PutSupportedWoCtx interface {
-	Put(url.Values, http.Header) (int, interface{}, http.Header)
+type PutSupportedRequest interface {
+	Put(*http.Request) (int, interface{}, http.Header)
 }
 
 // DeleteSupported is the interface that provides the Delete
 // method a resource must support to receive HTTP DELETEs.
 type DeleteSupported interface {
-	Delete(context.Context, url.Values, http.Header) (int, interface{}, http.Header)
+	Delete(url.Values, http.Header) (int, interface{}, http.Header)
 }
 
-// DeleteSupportedWoCtx is the interface that provides the Delete
+// DeleteSupportedRequest is the interface that provides the Delete
 // method a resource must support to receive HTTP DELETEs.
-type DeleteSupportedWoCtx interface {
-	Delete(url.Values, http.Header) (int, interface{}, http.Header)
+type DeleteSupportedRequest interface {
+	Delete(*http.Request) (int, interface{}, http.Header)
 }
 
 // HeadSupported is the interface that provides the Head
 // method a resource must support to receive HTTP HEADs.
 type HeadSupported interface {
-	Head(context.Context, url.Values, http.Header) (int, interface{}, http.Header)
+	Head(url.Values, http.Header) (int, interface{}, http.Header)
 }
 
-// HeadSupportedWoCtx is the interface that provides the Head
+// HeadSupportedRequest is the interface that provides the Head
 // method a resource must support to receive HTTP HEADs.
-type HeadSupportedWoCtx interface {
-	Head(url.Values, http.Header) (int, interface{}, http.Header)
+type HeadSupportedRequest interface {
+	Head(*http.Request) (int, interface{}, http.Header)
 }
 
 // PatchSupported is the interface that provides the Patch
 // method a resource must support to receive HTTP PATCHs.
 type PatchSupported interface {
-	Patch(context.Context, url.Values, http.Header) (int, interface{}, http.Header)
+	Patch(url.Values, http.Header) (int, interface{}, http.Header)
 }
 
-// PatchSupportedWoCtx is the interface that provides the Patch
+// PatchSupportedRequest is the interface that provides the Patch
 // method a resource must support to receive HTTP PATCHs.
-type PatchSupportedWoCtx interface {
-	Patch(url.Values, http.Header) (int, interface{}, http.Header)
+type PatchSupportedRequest interface {
+	Patch(*http.Request) (int, interface{}, http.Header)
 }
 
 // An API manages a group of resources by routing requests
@@ -134,43 +133,53 @@ func NewAPI() *API {
 }
 
 type (
-	handlerType      func(context.Context, url.Values, http.Header) (int, interface{}, http.Header)
-	handlerTypeWoCtx func(url.Values, http.Header) (int, interface{}, http.Header)
+	handlerType        func(url.Values, http.Header) (int, interface{}, http.Header)
+	handlerTypeRequest func(*http.Request) (int, interface{}, http.Header)
 )
 
-func (api *API) detectHandler(request *http.Request, resource interface{}) (handler handlerType) {
-	decorateContext := func(h handlerTypeWoCtx) handlerType {
-		return func(ctx context.Context, u url.Values, hdr http.Header) (int, interface{}, http.Header) {
-			return h(u, hdr)
+func (api *API) detectHandler(request *http.Request, resource interface{}) (handler handlerTypeRequest) {
+
+	decorateWithRequest := func(h handlerType) handlerTypeRequest {
+		return func(r *http.Request) (int, interface{}, http.Header) {
+			return h(r.Form, r.Header)
 		}
 	}
+
 	switch request.Method {
 	case GET:
 		if resconcrete, ok := resource.(GetSupported); ok {
+			handler = decorateWithRequest(resconcrete.Get)
+		} else if resconcrete, ok := resource.(GetSupportedRequest); ok {
 			handler = resconcrete.Get
-		} else if resconcrete, ok := resource.(GetSupportedWoCtx); ok {
-			handler = decorateContext(resconcrete.Get)
 		}
 	case POST:
 		if resconcrete, ok := resource.(PostSupported); ok {
+			handler = decorateWithRequest(resconcrete.Post)
+		} else if resconcrete, ok := resource.(PostSupportedRequest); ok {
 			handler = resconcrete.Post
-		} else if resconcrete, ok := resource.(PostSupportedWoCtx); ok {
-			handler = decorateContext(resconcrete.Post)
 		}
 	case PUT:
 		if resconcrete, ok := resource.(PutSupported); ok {
+			handler = decorateWithRequest(resconcrete.Put)
+		} else if resconcrete, ok := resource.(PutSupportedRequest); ok {
 			handler = resconcrete.Put
 		}
 	case DELETE:
 		if resconcrete, ok := resource.(DeleteSupported); ok {
+			handler = decorateWithRequest(resconcrete.Delete)
+		} else if resconcrete, ok := resource.(DeleteSupportedRequest); ok {
 			handler = resconcrete.Delete
 		}
 	case HEAD:
 		if resconcrete, ok := resource.(HeadSupported); ok {
+			handler = decorateWithRequest(resconcrete.Head)
+		} else if resconcrete, ok := resource.(HeadSupportedRequest); ok {
 			handler = resconcrete.Head
 		}
 	case PATCH:
 		if resconcrete, ok := resource.(PatchSupported); ok {
+			handler = decorateWithRequest(resconcrete.Patch)
+		} else if resconcrete, ok := resource.(PatchSupportedRequest); ok {
 			handler = resconcrete.Patch
 		}
 	}
@@ -188,7 +197,8 @@ func (api *API) requestHandler(resource interface{}) http.HandlerFunc {
 			rw.WriteHeader(http.StatusMethodNotAllowed)
 			return
 		}
-		code, data, header := handler(request.Context(), request.Form, request.Header)
+		//request.Context(),
+		code, data, header := handler(request)
 		content, err := api.doMarshal(data, header)
 		if err != nil {
 			rw.WriteHeader(http.StatusInternalServerError)

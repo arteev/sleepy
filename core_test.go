@@ -46,7 +46,7 @@ type DataExport struct {
 	Name string
 }
 
-func (item ItemCT) Get(values url.Values, headers http.Header) (int, interface{}, http.Header) {
+func (item ItemCT) Get(r *http.Request) (int, interface{}, http.Header) {
 	items := []DataExport{
 		{"Name1"},
 		{"Name2"},
