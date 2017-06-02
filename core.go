@@ -216,7 +216,7 @@ func (api *API) requestHandler(resource interface{}) http.HandlerFunc {
 
 func (api *API) doMarshal(data interface{}, header http.Header) (content []byte, err error) {
 	contentType := "application/json"
-	marshal := json.MarshalIndent
+	var marshal Marshaler
 	if h, exists := header["Content-type"]; exists {
 		contentType = h[0]
 		if idx := strings.Index(contentType, ";"); idx != -1 {
@@ -228,7 +228,15 @@ func (api *API) doMarshal(data interface{}, header http.Header) (content []byte,
 			marshal = m
 		}
 	}
-	content, err = marshal(data, "", "  ")
+	if marshal != nil {
+		content, err = marshal(data, "", "  ")
+	} else {
+		if arr, ok := data.([]byte); ok {
+			content = arr
+			return
+		}
+		content, err = json.MarshalIndent(data, "", "  ")
+	}
 	return
 }
 
