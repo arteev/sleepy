@@ -1,6 +1,7 @@
 package sleepy
 
 import (
+	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -8,6 +9,7 @@ import (
 	"net/url"
 	"strings"
 	"sync"
+	"time"
 )
 
 //The definition of methods http
@@ -108,6 +110,8 @@ type API struct {
 	muxInitialized bool
 	once           sync.Once
 	marshal        map[string]Marshaler
+	mus            sync.Mutex
+	server         *http.Server
 }
 
 //A Marshaler it is type for set up the option of  serialization  API
@@ -281,5 +285,27 @@ func (api *API) StartAddr(addr string, opts ...Option) error {
 	for _, opt := range opts {
 		opt(api)
 	}
-	return http.ListenAndServe(addr, api.Mux())
+	api.mus.Lock()
+	api.server = &http.Server{Addr: addr, Handler: api.Mux()}
+	api.mus.Unlock()
+	defer func() {
+		api.mus.Lock()
+		defer api.mus.Unlock()
+		api.server = nil
+	}()
+	return api.server.ListenAndServe()
+}
+
+func (api *API) Shutdown() error {
+	api.mus.Lock()
+	defer api.mus.Unlock()
+	if api.server != nil {
+		ctx, _ := context.WithTimeout(context.Background(), time.Second*1)
+		/*go func {
+			<-time.After(1 * time.Second)
+			api.server.Close()
+		}*/
+		return api.server.Shutdown(ctx)
+	}
+	return nil
 }
